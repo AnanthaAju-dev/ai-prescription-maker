@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Prescription Maker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .suggestion-box { position: absolute; z-index: 100; width: 100%; background: white; border: 1px solid #ddd; max-height: 200px; overflow-y: auto; border-radius: 15px; margin-top: 5px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .suggestion-item { padding: 12px; cursor: pointer; border-bottom: 1px solid #f8f8f8; font-size: 14px; }
+        .suggestion-item:hover { background-color: #f0f4ff; color: #4f46e5; font-weight: bold; }
+        .urgent-tag { animation: flash 1.5s infinite; background-color: #ef4444; color: white; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; }
+        @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .hidden { display: none; }
+        @media print {
+            .no-print { display: none !important; }
+            #printArea { display: block !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-900">
+
+    <nav class="no-print bg-slate-900 text-white p-4 sticky top-0 z-50 shadow-xl border-b border-slate-700">
+        <div class="max-w-3xl mx-auto flex justify-between items-center">
+            <span class="font-black tracking-tighter text-xl uppercase">AI Prescription Maker</span>
+            <div class="flex gap-3">
+                <button onclick="switchTab('maker')" class="text-[10px] font-black uppercase px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 transition">➕ Create Rx</button>
+                <button onclick="switchTab('logs')" class="text-[10px] font-black uppercase px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 transition">📂 Patient Logs</button>
+            </div>
+        </div>
+    </nav>
+
+    <div id="tab-maker" class="max-w-3xl mx-auto p-4 no-print pb-24">
+        <details class="bg-slate-800 text-white p-4 rounded-3xl mb-6 shadow-xl cursor-pointer border border-slate-700">
+            <summary class="text-[10px] font-black uppercase text-slate-400 text-center tracking-widest">Clinical Identity Setup</summary>
+            <div class="grid grid-cols-2 gap-3 mt-4">
+                <input type="text" id="docName" placeholder="Doctor's Name" class="bg-slate-900 p-3 rounded-xl text-sm border-none focus:ring-2 focus:ring-indigo-500">
+                <input type="text" id="docQual" placeholder="Qualifications" class="bg-slate-900 p-3 rounded-xl text-sm border-none focus:ring-2 focus:ring-indigo-500">
+                <input type="text" id="docClinic" placeholder="Clinic/Hospital" class="bg-slate-900 p-3 rounded-xl text-sm border-none focus:ring-2 focus:ring-indigo-500">
+                <input type="text" id="docContact" placeholder="Contact Details" class="bg-slate-900 p-3 rounded-xl text-sm border-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+        </details>
+
+        <div class="bg-white p-8 rounded-[3rem] shadow-2xl border border-slate-200 space-y-6">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-4">
+                <h1 class="text-2xl font-black text-slate-800">New Clinical Session</h1>
+                <div id="ai_status" class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">AI System Online</div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="space-y-1">
+                    <label class="text-[9px] font-black text-slate-400 ml-2 uppercase">Mobile (Recall)</label>
+                    <input type="tel" id="mobile" oninput="autoRecall(this.value)" placeholder="91..." class="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[9px] font-black text-slate-400 ml-2 uppercase">Patient Name</label>
+                    <input type="text" id="name" placeholder="Full Name" class="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+                <input type="text" id="pastHist" placeholder="Past Med Hist" class="p-3 bg-slate-50 rounded-xl text-xs border border-slate-100">
+                <input type="text" id="famHist" placeholder="Family Hist" class="p-3 bg-slate-50 rounded-xl text-xs border border-slate-100">
+                <input type="text" id="drugHist" placeholder="Drug History" class="p-3 bg-slate-50 rounded-xl text-xs border border-slate-100">
+            </div>
+
+            <div class="space-y-1">
+                <label class="text-[9px] font-black text-slate-400 ml-2 uppercase text-red-500">AI Urgency Detection (Diagnosis)</label>
+                <textarea id="diagnosis" oninput="checkUrgency(this.value)" placeholder="Enter Diagnosis (AI checks for 'Severe', 'Emergency', etc)..." class="w-full p-4 bg-slate-50 rounded-2xl h-24 border-none focus:ring-4 focus:ring-red-50"></textarea>
+            </div>
+            
+            <div class="relative space-y-1">
+                <label class="text-[9px] font-black text-slate-400 ml-2 uppercase">Medications & Instructions</label>
+                <textarea id="rx" oninput="showMeds(this.value)" placeholder="Type 'Amox', 'Para'..." class="w-full p-6 bg-slate-900 text-indigo-100 rounded-[2.5rem] h-64 font-mono outline-none shadow-inner"></textarea>
+                <div id="med_suggestions" class="suggestion-box hidden"></div>
+                <button onclick="smartTranslate()" class="w-full mt-3 bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition shadow-lg">✨ AI Translate: Malayalam & Patient Clarity</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <input type="text" id="nextVisit" value="Review After " class="p-4 bg-indigo-50 rounded-2xl font-bold text-indigo-700">
+                <input type="number" id="feeAmt" placeholder="Fee Amount" class="p-4 bg-slate-50 rounded-2xl border-none">
+            </div>
+
+            <div class="pt-6 border-t space-y-3">
+                <button onclick="saveRecord()" class="w-full bg-slate-900 text-white p-6 rounded-2xl font-black shadow-xl hover:bg-black transition">💾 SAVE PATIENT DATA & REFRESH</button>
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="printPDF()" class="bg-emerald-600 text-white p-5 rounded-2xl font-black shadow-lg hover:bg-emerald-700 transition">📄 GENERATE PDF</button>
+                    <button onclick="switchTab('logs')" class="bg-indigo-600 text-white p-5 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition">📂 VIEW RECENT LOGS</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-logs" class="max-w-3xl mx-auto p-4 no-print hidden">
+        <div class="bg-white p-8 rounded-[3rem] shadow-xl border border-slate-200">
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-800">Saved Patient Database</h2>
+                    <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">Medical Records History</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="renderLogs('all')" class="text-[10px] bg-slate-100 px-4 py-2 rounded-full font-black uppercase hover:bg-slate-200 transition">All Records</button>
+                    <button onclick="renderLogs('urgent')" class="text-[10px] bg-red-100 text-red-600 px-4 py-2 rounded-full font-black uppercase hover:bg-red-200 transition">🔴 Red Flag Only</button>
+                </div>
+            </div>
+            <div id="logArea" class="space-y-4">
+                </div>
+        </div>
+    </div>
+
+    <div id="printArea" class="hidden p-12 bg-white min-h-screen">
+        <div id="p_urgency_banner" class="hidden bg-red-700 text-white text-center py-2 font-black mb-6 rounded uppercase tracking-widest">⚠️ URGENT CLINICAL CASE ⚠️</div>
+        <div class="flex justify-between">
+            <div>
+                <h1 id="p_doc_name" class="text-2xl font-bold uppercase underline">Doctor Name</h1>
+                <p id="p_doc_qual" class="text-sm font-semibold">Quals</p>
+                <p id="p_doc_clinic" class="text-xs">Clinic</p>
+            </div>
+            <div class="text-right text-xs">
+                <p>Date: <span id="p_date"></span></p>
+            </div>
+        </div>
+        <hr class="my-6 border-black border-t-2">
+        <div class="space-y-8">
+            <p class="text-lg"><strong>Patient:</strong> <span id="p_name"></span> | <strong>Mobile:</strong> <span id="p_mob_print"></span></p>
+            <div><h2 class="font-bold border-b-2 text-sm uppercase mb-2">Diagnosis</h2><p id="p_diag" class="text-xl"></p></div>
+            <h2 class="text-4xl font-serif italic border-b-4 inline-block">Rx</h2>
+            <p id="p_rx" class="text-2xl whitespace-pre-wrap leading-relaxed mt-6 min-h-[450px]"></p>
+            <div class="border-t-2 pt-6">
+                <p class="font-bold text-lg italic">Review Instruction: <span id="p_next"></span></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let db = JSON.parse(localStorage.getItem('ai_maker_db')) || [];
+        const medDB = ["Amoxicillin 500mg", "Atorvastatin 10mg", "Azithromycin 500mg", "Cefixime 200mg", "Cetirizine 10mg", "Clopidogrel 75mg", "Diclofenac 50mg", "Doxycycline 100mg", "Ibuprofen 400mg", "Insulin Glargine", "Metformin 500mg", "Omeprazole 20mg", "Pantoprazole 40mg", "Paracetamol 500mg", "Paracetamol 650mg", "Vitamin B Complex", "Vitamin C"];
+
+        function switchTab(tab) {
+            document.getElementById('tab-maker').classList.toggle('hidden', tab !== 'maker');
+            document.getElementById('tab-logs').classList.toggle('hidden', tab !== 'logs');
+            if(tab === 'logs') renderLogs('all');
+        }
+
+        function checkUrgency(val) {
+            const status = document.getElementById('ai_status');
+            const danger = ["severe", "pain", "emergency", "fever", "chest", "breathless", "accident", "acute", "bleeding"];
+            const isUrgent = danger.some(k => val.toLowerCase().includes(k));
+            
+            if (isUrgent && val.length > 3) {
+                status.innerText = "AI: URGENT RED FLAG";
+                status.className = "bg-red-100 text-red-700 px-3 py-1 rounded-full text-[10px] font-black uppercase";
+            } else {
+                status.innerText = "AI SYSTEM ONLINE";
+                status.className = "bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase";
+            }
+        }
+
+        function showMeds(val) {
+            const last = val.split('\n').pop().toLowerCase();
+            const box = document.getElementById('med_suggestions');
+            if (last.length < 1) { box.classList.add('hidden'); return; }
+            const matches = medDB.filter(m => m.toLowerCase().includes(last));
+            box.innerHTML = matches.map(m => `<div class="suggestion-item" onclick="selectMed('${m}')">${m}</div>`).join('');
+            box.classList.toggle('hidden', matches.length === 0);
+        }
+
+        function selectMed(m) {
+            const rx = document.getElementById('rx');
+            const lines = rx.value.split('\n');
+            lines[lines.length-1] = m + " - ";
+            rx.value = lines.join('\n');
+            document.getElementById('med_suggestions').classList.add('hidden');
+        }
+
+        function smartTranslate() {
+            let t = document.getElementById('rx').value;
+            const rules = {
+                "after food": "ഭക്ഷണത്തിന് ശേഷം (PC)", "before food": "ഭക്ഷണത്തിന് മുമ്പ് (AC)", 
+                "at night": "രാത്രിയിൽ (HS)", "TID": "3 times a day", "BID": "2 times a day"
+            };
+            Object.keys(rules).forEach(k => { t = t.replace(new RegExp(`\\b${k}\\b`, "gi"), rules[k]); });
+            document.getElementById('rx').value = t;
+        }
+
+        function saveRecord() {
+            const isUrgent = document.getElementById('ai_status').innerText.includes("URGENT");
+            const data = {
+                mob: document.getElementById('mobile').value,
+                name: document.getElementById('name').value,
+                diag: document.getElementById('diagnosis').value,
+                urgent: isUrgent,
+                date: new Date().toLocaleDateString()
+            };
+            if(!data.name || !data.mob) return alert("Missing Name or Mobile");
+            db.unshift(data);
+            localStorage.setItem('ai_maker_db', JSON.stringify(db));
+            alert("Record Saved Successfully");
+            window.location.reload();
+        }
+
+        function renderLogs(filter) {
+            const area = document.getElementById('logArea');
+            let filtered = filter === 'urgent' ? db.filter(r => r.urgent) : db;
+            if(filtered.length === 0) { area.innerHTML = "<p class='text-center text-slate-400 italic py-10'>No records found.</p>"; return; }
+            area.innerHTML = filtered.map((r, i) => `
+                <div class="flex justify-between items-center p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
+                    <div>
+                        <div class="flex items-center gap-3">
+                            <h3 class="font-black text-slate-800 text-lg">${r.name}</h3>
+                            ${r.urgent ? '<span class="urgent-tag">RED FLAG</span>' : ''}
+                        </div>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mt-1">${r.date} | ${r.mob}</p>
+                        <p class="text-xs text-slate-500 mt-2 italic">Diagnosis: ${r.diag}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function printPDF() {
+            document.getElementById('p_doc_name').innerText = document.getElementById('docName').value || "Doctor";
+            document.getElementById('p_name').innerText = document.getElementById('name').value;
+            document.getElementById('p_mob_print').innerText = document.getElementById('mobile').value;
+            document.getElementById('p_date').innerText = new Date().toLocaleDateString();
+            document.getElementById('p_diag').innerText = document.getElementById('diagnosis').value;
+            document.getElementById('p_rx').innerText = document.getElementById('rx').value;
+            document.getElementById('p_next').innerText = document.getElementById('nextVisit').value;
+            const isUrgent = document.getElementById('ai_status').innerText.includes("URGENT");
+            document.getElementById('p_urgency_banner').classList.toggle('hidden', !isUrgent);
+            window.print();
+        }
+
+        function autoRecall(mob) { const f = db.find(r => r.mob === mob); if(f) document.getElementById('name').value = f.name; }
+    </script>
+</body>
+</html>
